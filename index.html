@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>CINEFLIX</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{color-scheme:dark}
@@ -142,13 +142,8 @@ const FALLBACK = [
   { id: "d6", title: "Desert Rain", year: 2022, rating: "PG", genre: "Drama", cat: "Drama", desc: "Sukhe sehra mein aik maa ki umeed aur ik aakhri safar.", c1: "#4b6cb7", c2: "#182848" }
 ];
 
-/* ===================== FIREBASE ===================== */
+/* ===================== FIREBASE (boot() mein start hota hai) ===================== */
 let auth = null, db = null, initError = "";
-try {
-  firebase.initializeApp(CONFIG.firebase);
-  auth = firebase.auth();
-  db = firebase.firestore();
-} catch (e) { initError = e.message; console.error(e); }
 
 /* ===================== STATE & HELPERS ===================== */
 const $ = s => document.querySelector(s);
@@ -198,6 +193,7 @@ function embedOf(url) {
 }
 
 /* ===================== DATA ===================== */
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("Internet ya Firebase slow hai, dobara try karein")), ms))]);
 async function getProfile() {
   const ref = db.collection("users").doc(S.user.uid);
   const snap = await ref.get();
@@ -209,7 +205,7 @@ async function getProfile() {
 async function loadMovies() {
   let list = [];
   try {
-    const s = await db.collection("movies").get();
+    const s = await withTimeout(db.collection("movies").get(), 8000);
     list = s.docs.map(d => ({ id: d.id, ...d.data() }));
   } catch (e) { console.error(e); }
   S.movies = list.length ? list : FALLBACK;
@@ -397,7 +393,11 @@ async function submitPay(e) {
 
 /* ===================== ROUTER ===================== */
 function render() {
-  if (!ready) return;
+  if (!ready) {
+    $("#nav").innerHTML = "";
+    $("#app").innerHTML = '<div class="load" style="display:grid;place-items:center"><div class="logo">' + CONFIG.brand + '</div></div>';
+    return;
+  }
   const authed = !!S.user;
   const r = (location.hash.match(/#\/(\w+)/) || [, "browse"])[1];
   $("#nav").innerHTML = authed ? nav(r) : "";
@@ -405,23 +405,30 @@ function render() {
   const pages = { browse, plans, account };
   $("#app").innerHTML = (pages[r] || browse)();
 }
-async function boot() {
-  await loadMovies();
+function boot() {
+  try {
+    firebase.initializeApp(CONFIG.firebase);
+    auth = firebase.auth();
+    db = firebase.firestore();
+    db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+  } catch (e) { initError = e.message; console.error(e); }
   window.onscroll = () => $("#nav").classList.toggle("solid", scrollY > 40);
   window.onhashchange = render;
+  render();
+  loadMovies().then(render);
   if (!auth) { ready = true; return render(); }
   auth.onAuthStateChanged(async u => {
     S.user = u;
     S.profile = null;
     if (u) {
-      try { S.profile = await getProfile(); }
+      try { S.profile = await withTimeout(getProfile(), 8000); }
       catch (e) { console.error(e); toast(friendly(e)); }
     }
     ready = true;
     render();
   });
 }
-boot();
+window.addEventListener("load", boot);
 </script>
 </body>
 </html>
