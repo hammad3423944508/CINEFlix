@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ur">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CINEFLIX Admin</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{color-scheme:dark}
+body{background:#141414;color:#fff;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;font-size:15px}
+button,input,select,textarea{font:inherit}
+input,select,textarea{width:100%;padding:12px 14px;margin-bottom:12px;background:#333;border:1px solid #333;border-radius:4px;color:#fff;font-size:15px}
+input:focus,select:focus,textarea:focus{outline:2px solid #E50914;border-color:transparent}
+label{display:block;font-size:13px;color:#b3b3b3;margin-bottom:4px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border:0;border-radius:4px;font-weight:700;cursor:pointer;background:#fff;color:#000;font-size:14px}
+.btn.r{background:#E50914;color:#fff}
+.btn.g{background:#404040;color:#fff}
+.btn.sm{padding:6px 12px;font-size:13px}
+.btn:hover{opacity:.85}
+.btn:disabled{opacity:.35;cursor:default}
+.logo{color:#E50914;font-weight:900;font-size:24px;letter-spacing:1px}
+.load{min-height:100vh;display:grid;place-items:center}
+.login{min-height:100vh;display:grid;place-items:center;background:linear-gradient(#0009,#000e),linear-gradient(135deg,#8e0e00,#141414);padding:16px}
+.lcard{background:rgba(0,0,0,.8);padding:50px 56px;border-radius:6px;width:min(420px,100%)}
+.lcard h1{font-size:30px;margin-bottom:6px}
+.note{color:#8c8c8c;font-size:13px;margin:-4px 0 14px}
+.err{color:#ff6b6b;font-size:14px;min-height:18px;margin-bottom:8px}
+.shell{display:flex;min-height:100vh}
+.side{width:230px;background:#000;padding:24px 0;position:sticky;top:0;height:100vh;flex-shrink:0}
+.side .logo{padding:0 22px 22px}
+.side .logo small{display:block;color:#b3b3b3;font-size:11px;letter-spacing:2px;font-weight:400;margin-top:2px}
+.nb{display:flex;justify-content:space-between;align-items:center;width:100%;padding:11px 22px;background:none;border:0;border-left:3px solid transparent;color:#b3b3b3;text-align:left;cursor:pointer;font-size:15px}
+.nb:hover{color:#fff;background:#1a1a1a}
+.nb.on{color:#fff;border-left-color:#E50914;background:#1a1a1a;font-weight:700}
+.badge{background:#E50914;color:#fff;border-radius:10px;padding:1px 8px;font-size:12px;font-weight:700}
+.side .bottom{position:absolute;bottom:20px;left:22px;right:22px}
+.main{flex:1;padding:32px 4%;min-width:0}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:26px;flex-wrap:wrap}
+.top h1{font-size:28px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:28px}
+.stat{background:#1f1f1f;border-radius:6px;padding:20px;border-left:4px solid #E50914}
+.stat b{display:block;font-size:30px;margin-top:6px}
+.stat span{color:#b3b3b3;font-size:13px}
+.panel{background:#1f1f1f;border-radius:6px;overflow:hidden;margin-bottom:24px}
+.panel h2{font-size:17px;padding:16px 18px;border-bottom:1px solid #2b2b2b}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:640px}
+th,td{text-align:left;padding:13px 16px;border-bottom:1px solid #2b2b2b;vertical-align:middle}
+th{color:#8c8c8c;font-weight:400;font-size:13px}
+tr:hover td{background:#252525}
+td small{color:#8c8c8c;display:block;font-size:12px}
+.pill{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700}
+.p-pending{background:#E5B10933;color:#E5B109}
+.p-active,.p-approved{background:#46d36933;color:#46d369}
+.p-expired,.p-rejected{background:#E5091433;color:#ff6b6b}
+.p-none{background:#55555580;color:#ddd}
+.tabs{display:flex;gap:8px;padding:14px 18px;flex-wrap:wrap;border-bottom:1px solid #2b2b2b}
+.tabs button{background:#2a2a2a;color:#ddd;border:0;border-radius:16px;padding:6px 14px;cursor:pointer;font-size:13px;text-transform:capitalize}
+.tabs button.on{background:#fff;color:#000;font-weight:700}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+.empty{padding:30px;text-align:center;color:#8c8c8c}
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.tcard{background:#1f1f1f;border-radius:6px;overflow:hidden}
+.thumb{aspect-ratio:16/9;display:flex;align-items:flex-end;padding:10px;font-weight:700}
+.thumb span{text-shadow:0 1px 3px #000}
+.tbody{padding:12px}
+.tbody small{color:#8c8c8c;font-size:12px}
+.tbody .acts{margin-top:10px}
+.modal{position:fixed;inset:0;background:#000c;z-index:100;display:none;align-items:flex-start;justify-content:center;padding:30px 16px;overflow:auto}
+.modal.on{display:flex}
+.box{background:#181818;border-radius:8px;width:min(620px,100%);box-shadow:0 10px 40px #000}
+.pad{padding:26px}
+.pad h2{margin-bottom:18px;font-size:22px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(120px);background:#fff;color:#000;padding:12px 20px;border-radius:4px;font-weight:700;z-index:300;transition:transform .35s;max-width:90%;text-align:center}
+.toast.on{transform:translateX(-50%) translateY(0)}
+@media(max-width:760px){
+  .shell{flex-direction:column}
+  .side{width:100%;height:auto;position:static;padding:12px 0;display:flex;overflow-x:auto;align-items:center}
+  .side .logo{padding:0 14px;white-space:nowrap}
+  .side .logo small,.side .bottom{display:none}
+  .nb{width:auto;white-space:nowrap;border-left:0;border-bottom:3px solid transparent;padding:10px 14px}
+  .nb.on{border-bottom-color:#E50914;border-left-color:transparent}
+  .two{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="modal" class="modal" onclick="if(event.target===this)closeM()"></div>
+<div id="toast" class="toast"></div>
+
+<script>
+/* ===================== SETTINGS (user page wali SAME firebase config) ===================== */
+const CONFIG = {
+  brand: "CINEFLIX",
+  firebase: {
+    apiKey: "AIzaSyD8SufYEEuMh6EETsnYEseh-DIMg_pBgjM",
+    authDomain: "cineflix-871ed.firebaseapp.com",
+    projectId: "cineflix-871ed",
+    storageBucket: "cineflix-871ed.firebasestorage.app",
+    messagingSenderId: "326134692352",
+    appId: "1:326134692352:web:2ec17bbfc280168c1236e5"
+  },
+  plans: [
+    { id: "basic", name: "Basic", price: 300, days: 30 },
+    { id: "standard", name: "Standard", price: 500, days: 30 },
+    { id: "premium", name: "Premium", price: 800, days: 30 }
+  ],
+  categories: ["Trending Now", "Action & Thrillers", "Comedies", "Drama", "Horror", "Sci-Fi"]
+};
+const DAY = 864e5;
+
+/* ===================== FIREBASE (boot() mein start hota hai) ===================== */
+let auth = null, db = null, initError = "";
+const DEL = () => firebase.firestore.FieldValue.delete();
+
+/* ===================== HELPERS ===================== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = n => "Rs " + Number(n || 0).toLocaleString();
+const dt = ms => ms ? new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-";
+const planOf = id => CONFIG.plans.find(p => p.id === id);
+const planName = id => planOf(id)?.name || "-";
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("Internet ya Firebase slow hai, dobara try karein")), ms))]);
+const S = { admin: null, ready: false, tab: "dash", ptab: "pending", users: [], payments: [], movies: [] };
+function subOf(u) {
+  if (u.status === "active") return u.expiresAt > Date.now() ? "active" : "expired";
+  if (u.status === "pending") return "pending";
+  return "none";
+}
+const subLabel = { active: "Active", pending: "Pending", expired: "Expired", none: "Inactive" };
+function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("on"); setTimeout(() => el.classList.remove("on"), 3200); }
+function openM(html) { $("#modal").innerHTML = html; $("#modal").classList.add("on"); }
+function closeM() { $("#modal").classList.remove("on"); }
+const gradOf = m => `linear-gradient(135deg,${esc(m.c1 || "#333")},${esc(m.c2 || "#111")})`;
+function friendly(err) {
+  const map = {
+    "auth/invalid-credential": "Email ya password galat hai.",
+    "auth/user-not-found": "Ye email registered nahi hai.",
+    "auth/wrong-password": "Password galat hai.",
+    "auth/invalid-email": "Email sahi format mein likhein.",
+    "auth/network-request-failed": "Internet connection check karein.",
+    "auth/unauthorized-domain": "Ye domain Firebase mein authorized nahi hai. Authentication > Settings > Authorized domains mein add karein.",
+    "permission-denied": "Permission nahi hai. Firestore rules aur admins collection check karein."
+  };
+  return map[err?.code] || err?.message || "Kuch ghalat ho gaya";
+}
+
+/* ===================== DATA ===================== */
+async function loadAll() {
+  const [u, p, m] = await Promise.all([
+    db.collection("users").get(),
+    db.collection("payments").orderBy("createdAt", "desc").get(),
+    db.collection("movies").get()
+  ]);
+  S.users = u.docs.map(d => ({ id: d.id, ...d.data() }));
+  S.payments = p.docs.map(d => ({ id: d.id, ...d.data() }));
+  S.movies = m.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+async function refresh() {
+  try { await withTimeout(loadAll(), 10000); render(); toast("Data refresh ho gaya"); }
+  catch (e) { toast(friendly(e)); }
+}
+
+/* ===================== AUTH ===================== */
+async function isAdmin(uid) { return (await db.collection("admins").doc(uid).get()).exists; }
+async function login(e) {
+  e.preventDefault();
+  const f = e.target;
+  if (!auth) return showErr("Firebase start nahi hua: " + initError);
+  try {
+    const c = await auth.signInWithEmailAndPassword(f.querySelector("[name=email]").value.trim(), f.querySelector("[name=pw]").value);
+    if (!(await withTimeout(isAdmin(c.user.uid), 8000))) {
+      await auth.signOut();
+      showErr("Ye account admin nahi hai. Firestore mein admins collection check karein.");
+    }
+  } catch (err) { showErr(friendly(err)); }
+}
+function showErr(t) { const el = $("#err"); if (el) el.textContent = t; }
+async function signOut() { await auth.signOut(); }
+
+/* ===================== ACTIONS: PAYMENTS & USERS ===================== */
+async function approve(pid) {
+  const p = S.payments.find(x => x.id === pid);
+  const u = S.users.find(x => x.id === p?.uid);
+  const plan = planOf(p?.plan);
+  if (!u || !plan) return toast("User ya plan nahi mila");
+  if (!confirm(`${u.name} ka ${plan.name} plan approve karein?`)) return;
+  try {
+    const start = Math.max(Date.now(), u.expiresAt || 0);
+    const b = db.batch();
+    b.update(db.collection("payments").doc(pid), { status: "approved", approvedAt: Date.now() });
+    b.update(db.collection("users").doc(u.id), { status: "active", plan: p.plan, expiresAt: start + plan.days * DAY, pendingTxn: DEL() });
+    await b.commit();
+    toast("Subscription approve ho gayi");
+    await refresh();
+  } catch (e) { toast(friendly(e)); }
+}
+async function reject(pid) {
+  const p = S.payments.find(x => x.id === pid);
+  if (!confirm("Ye payment reject karein?")) return;
+  try {
+    const b = db.batch();
+    b.update(db.collection("payments").doc(pid), { status: "rejected", rejectedAt: Date.now() });
+    if (p?.uid) b.update(db.collection("users").doc(p.uid), { status: "none", pendingTxn: DEL() });
+    await b.commit();
+    toast("Payment reject ho gayi");
+    await refresh();
+  } catch (e) { toast(friendly(e)); }
+}
+async function extend(uid) {
+  const u = S.users.find(x => x.id === uid);
+  const plan = planOf(u.plan);
+  if (!plan) return toast("Pehle plan set hona chahiye");
+  const start = Math.max(Date.now(), u.expiresAt || 0);
+  try {
+    await db.collection("users").doc(uid).update({ status: "active", expiresAt: start + plan.days * DAY });
+    toast(`${plan.days} din extend ho gaye`);
+    await refresh();
+  } catch (e) { toast(friendly(e)); }
+}
+async function cancelSub(uid) {
+  if (!confirm("Is user ki subscription cancel karein?")) return;
+  try {
+    await db.collection("users").doc(uid).update({ status: "none", expiresAt: 0, pendingTxn: DEL() });
+    toast("Subscription cancel ho gayi");
+    await refresh();
+  } catch (e) { toast(friendly(e)); }
+}
+
+/* ===================== ACTIONS: TITLES ===================== */
+function titleForm(id) {
+  const m = id ? S.movies.find(x => x.id === id) : {};
+  openM(`<div class="box"><form class="pad" onsubmit="saveTitle(event,'${esc(id || "")}')">
+    <h2>${id ? "Title edit karein" : "Naya title add karein"}</h2>
+    <label>Title</label><input name="title" required value="${esc(m.title)}">
+    <div class="two">
+      <div><label>Saal</label><input name="year" type="number" value="${esc(m.year || 2026)}"></div>
+      <div><label>Rating</label><select name="rating">${["G", "PG", "PG-13", "TV-PG", "TV-14", "TV-MA", "R"].map(r => `<option ${m.rating === r ? "selected" : ""}>${r}</option>`).join("")}</select></div>
+      <div><label>Genre</label><input name="genre" value="${esc(m.genre)}"></div>
+      <div><label>Category (row)</label><input name="cat" list="cats" value="${esc(m.cat)}"><datalist id="cats">${CONFIG.categories.map(c => `<option value="${esc(c)}">`).join("")}</datalist></div>
+      <div><label>Thumbnail rang 1</label><input name="c1" type="color" value="${esc(m.c1 || "#8e0e00")}"></div>
+      <div><label>Thumbnail rang 2</label><input name="c2" type="color" value="${esc(m.c2 || "#1f1c18")}"></div>
+    </div>
+    <label>Description</label><textarea name="desc" rows="3">${esc(m.desc)}</textarea>
+    <label>Video link (Google Drive share link)</label><input name="videoUrl" value="${esc(m.videoUrl)}" placeholder="https://drive.google.com/file/d/XXXX/view?usp=sharing">
+    <p class="note">Drive par video ko "Anyone with the link" (Viewer) par share karke link yahan paste karein. Khali chhodne par user ko "upload nahi hui" dikhega.</p>
+    <div class="acts"><button class="btn r" type="submit">Save karein</button><button class="btn g" type="button" onclick="closeM()">Cancel</button></div>
+  </form></div>`);
+}
+async function saveTitle(e, id) {
+  e.preventDefault();
+  const f = e.target;
+  const g = n => f.querySelector(`[name=${n}]`).value.trim();
+  const data = { title: g("title"), year: Number(g("year")) || 0, rating: g("rating"), genre: g("genre"), cat: g("cat"), c1: g("c1"), c2: g("c2"), desc: g("desc"), videoUrl: g("videoUrl"), updatedAt: Date.now() };
+  try {
+    if (id) await db.collection("movies").doc(id).update(data);
+    else await db.collection("movies").add({ ...data, createdAt: Date.now() });
+    closeM();
+    toast("Title save ho gaya");
+    await refresh();
+  } catch (err) { toast(friendly(err)); }
+}
+async function deleteTitle(id) {
+  if (!confirm("Ye title hamesha ke liye delete karein?")) return;
+  try {
+    await db.collection("movies").doc(id).delete();
+    toast("Title delete ho gaya");
+    await refresh();
+  } catch (e) { toast(friendly(e)); }
+}
+
+/* ===================== PAGES ===================== */
+function stats() {
+  const d = new Date(), monthStart = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+  const active = S.users.filter(u => subOf(u) === "active").length;
+  const pending = S.payments.filter(p => p.status === "pending").length;
+  const revenue = S.payments.filter(p => p.status === "approved" && (p.approvedAt || 0) >= monthStart).reduce((s, p) => s + Number(p.amount || 0), 0);
+  return `<div class="stats">
+    <div class="stat"><span>Total users</span><b>${S.users.length}</b></div>
+    <div class="stat"><span>Active subscribers</span><b>${active}</b></div>
+    <div class="stat"><span>Pending payments</span><b>${pending}</b></div>
+    <div class="stat"><span>Titles</span><b>${S.movies.length}</b></div>
+    <div class="stat"><span>Is mahine ki aamdani</span><b>${fmt(revenue)}</b></div>
+  </div>`;
+}
+function payRows(list) {
+  if (!list.length) return `<tr><td colspan="7" class="empty">Koi payment nahi</td></tr>`;
+  return list.map(p => `<tr>
+    <td>${dt(p.createdAt)}</td>
+    <td>${esc(p.name)}<small>${esc(p.email)}</small></td>
+    <td>${esc(planName(p.plan))}<small>${fmt(p.amount)}</small></td>
+    <td>${esc(p.method)}<small>${esc(p.phone)}</small></td>
+    <td><b>${esc(p.txnId)}</b></td>
+    <td><span class="pill p-${esc(p.status)}">${esc(p.status)}</span></td>
+    <td><div class="acts">${p.status === "pending" ? `<button class="btn sm r" onclick="approve('${esc(p.id)}')">Approve</button><button class="btn sm g" onclick="reject('${esc(p.id)}')">Reject</button>` : ""}</div></td>
+  </tr>`).join("");
+}
+const PAY_HEAD = `<tr><th>Date</th><th>User</th><th>Plan</th><th>Method / Number</th><th>Transaction ID</th><th>Status</th><th></th></tr>`;
+function dashPage() {
+  const recent = S.payments.filter(p => p.status === "pending").slice(0, 5);
+  return `<div class="top"><h1>Dashboard</h1><button class="btn g" onclick="refresh()">↻ Refresh</button></div>
+  ${stats()}
+  <div class="panel"><h2>Pending payments</h2><div class="tw"><table>${PAY_HEAD}${payRows(recent)}</table></div></div>`;
+}
+function paymentsPage() {
+  const tabs = ["pending", "approved", "rejected", "all"];
+  const list = S.payments.filter(p => S.ptab === "all" || p.status === S.ptab);
+  return `<div class="top"><h1>Payments</h1><button class="btn g" onclick="refresh()">↻ Refresh</button></div>
+  <div class="panel"><div class="tabs">${tabs.map(t => `<button class="${S.ptab === t ? "on" : ""}" onclick="setPtab('${t}')">${t === "all" ? "Sab" : t}</button>`).join("")}</div>
+  <div class="tw"><table>${PAY_HEAD}${payRows(list)}</table></div></div>`;
+}
+function subsPage() {
+  const rows = S.users.map(u => {
+    const st = subOf(u);
+    return `<tr><td>${esc(u.name)}<small>${esc(u.email)}</small></td><td>${esc(planName(u.plan))}</td>
+    <td><span class="pill p-${st === "none" ? "none" : st}">${subLabel[st]}</span></td>
+    <td>${dt(u.expiresAt)}</td>
+    <td><div class="acts"><button class="btn sm g" ${u.plan ? "" : "disabled"} onclick="extend('${esc(u.id)}')">+ ${planOf(u.plan)?.days || 30} din</button>
+    <button class="btn sm g" ${st === "none" ? "disabled" : ""} onclick="cancelSub('${esc(u.id)}')">Cancel</button></div></td></tr>`;
+  }).join("");
+  return `<div class="top"><h1>Subscribers</h1><button class="btn g" onclick="refresh()">↻ Refresh</button></div>
+  <div class="panel"><div class="tw"><table><tr><th>User</th><th>Plan</th><th>Status</th><th>Expiry</th><th></th></tr>${rows || '<tr><td colspan="5" class="empty">Abhi koi user nahi</td></tr>'}</table></div></div>`;
+}
+function titlesPage() {
+  const cards = S.movies.map(m => `<div class="tcard">
+    <div class="thumb" style="background:${gradOf(m)}"><span>${esc(m.title)}</span></div>
+    <div class="tbody"><b>${esc(m.title)}</b><br><small>${esc(m.year)} · ${esc(m.rating)} · ${esc(m.genre)} · ${esc(m.cat)}</small><br>
+    <small>${m.videoUrl ? "Video link set" : "Video link nahi"}</small>
+    <div class="acts"><button class="btn sm g" onclick="titleForm('${esc(m.id)}')">Edit</button><button class="btn sm r" onclick="deleteTitle('${esc(m.id)}')">Delete</button></div></div></div>`).join("");
+  return `<div class="top"><h1>Titles</h1><button class="btn r" onclick="titleForm()">+ Naya title</button></div>
+  ${S.movies.length ? `<div class="tgrid">${cards}</div>` : '<div class="panel empty">Abhi koi title nahi. "Naya title" se add karein.</div>'}`;
+}
+function setTab(t) { S.tab = t; render(); }
+function setPtab(t) { S.ptab = t; render(); }
+
+/* ===================== RENDER ===================== */
+function loginView() {
+  return `<div class="login"><form class="lcard" onsubmit="login(event)">
+    <div class="logo" style="margin-bottom:24px">${CONFIG.brand} <span style="color:#b3b3b3;font-size:14px;font-weight:400">ADMIN</span></div>
+    <h1>Admin Sign In</h1><p class="note" style="margin-bottom:22px">Sirf admins ke liye</p>
+    <label>Email</label><input name="email" type="email" required>
+    <label>Password</label><input name="pw" type="password" required>
+    <p id="err" class="err"></p>
+    <button class="btn r" style="width:100%;justify-content:center;padding:13px" type="submit">Sign In</button>
+  </form></div>`;
+}
+function shellView() {
+  const pendingCount = S.payments.filter(p => p.status === "pending").length;
+  const items = [["dash", "Dashboard"], ["pay", "Payments", pendingCount], ["subs", "Subscribers"], ["titles", "Titles"]];
+  const page = { dash: dashPage, pay: paymentsPage, subs: subsPage, titles: titlesPage }[S.tab];
+  return `<div class="shell"><aside class="side">
+    <div class="logo">${CONFIG.brand}<small>ADMIN PANEL</small></div>
+    ${items.map(([k, l, c]) => `<button class="nb ${S.tab === k ? "on" : ""}" onclick="setTab('${k}')"><span>${l}</span>${c ? `<span class="badge">${c}</span>` : ""}</button>`).join("")}
+    <div class="bottom"><button class="btn g" style="width:100%" onclick="signOut()">Sign out</button></div>
+  </aside><main class="main">${page()}</main></div>`;
+}
+function render() {
+  if (!S.ready) {
+    $("#root").innerHTML = `<div class="load"><div class="logo">${CONFIG.brand}</div></div>`;
+    return;
+  }
+  $("#root").innerHTML = S.admin ? shellView() : loginView();
+}
+function boot() {
+  try {
+    firebase.initializeApp(CONFIG.firebase);
+    auth = firebase.auth();
+    db = firebase.firestore();
+    db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+  } catch (e) { initError = e.message; console.error(e); }
+  render();
+  if (!auth) { S.ready = true; return render(); }
+  auth.onAuthStateChanged(async u => {
+    S.admin = null;
+    if (u) {
+      try {
+        if (await withTimeout(isAdmin(u.uid), 8000)) {
+          S.admin = u;
+          await withTimeout(loadAll(), 10000);
+        } else {
+          await auth.signOut();
+        }
+      } catch (e) { console.error(e); toast(friendly(e)); }
+    }
+    S.ready = true;
+    render();
+  });
+}
+window.addEventListener("load", boot);
+</script>
+</body>
+</html>
