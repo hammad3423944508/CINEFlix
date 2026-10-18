@@ -8,6 +8,7 @@
 <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{color-scheme:dark}
@@ -111,7 +112,8 @@ const CONFIG = {
     projectId: "cineflix-871ed",
     storageBucket: "cineflix-871ed.firebasestorage.app",
     messagingSenderId: "326134692352",
-    appId: "1:326134692352:web:2ec17bbfc280168c1236e5"
+    appId: "1:326134692352:web:2ec17bbfc280168c1236e5",
+    databaseURL: "https://cineflix-871ed-default-rtdb.firebaseio.com"
   },
   // Yahan apne asli payment numbers daalein
   payment: {
@@ -143,7 +145,7 @@ const FALLBACK = [
 ];
 
 /* ===================== FIREBASE (boot() mein start hota hai) ===================== */
-let auth = null, db = null, initError = "";
+let auth = null, db = null, rtdb = null, initError = "";
 
 /* ===================== STATE & HELPERS ===================== */
 const $ = s => document.querySelector(s);
@@ -156,8 +158,17 @@ const planName = id => planOf(id)?.name || "Koi plan nahi";
 let ready = false, mode = "in", selPlan = null, selMethod = null;
 const S = { user: null, profile: null, movies: [], pendingName: "" };
 const find = id => S.movies.find(m => m.id === id) || FALLBACK.find(m => m.id === id);
-const grad = m => `linear-gradient(135deg,${m.c1 || "#333"},${m.c2 || "#111"})`;
-const hasAccess = () => !!S.profile && S.profile.status === "active" && S.profile.expiresAt > Date.now();
+const grad = m => m.thumb ? `url('${esc(m.thumb)}') center/cover` : `linear-gradient(135deg,${m.c1 || "#333"},${m.c2 || "#111"})`;
+const BLOCKED = ["banned", "sealed", "deleted"];
+function mirror(uid, data) {
+  try { if (rtdb) rtdb.ref("users/" + uid).update(data).catch(e => console.error("RTDB", e)); }
+  catch (e) { console.error("RTDB", e); }
+}
+function blockedView() {
+  const msg = { banned: "Aap ka account band kar diya gaya hai.", sealed: "Aap ka account temporarily seal hai. Admin se rabta karein.", deleted: "Ye account delete ho chuka hai." }[S.profile.blocked];
+  return `<div class="login"><div class="lcard"><h1>Account</h1><p class="sub" style="font-size:17px;color:#fff">${msg}</p><button class="btn g full" onclick="signOut()">Sign out</button></div></div>`;
+}
+const hasAccess = () => !!S.profile && S.profile.status === "active" && S.profile.expiresAt > Date.now() && S.profile.canWatch !== false && !BLOCKED.includes(S.profile.blocked);
 function subState() {
   const p = S.profile;
   if (!p) return "none";
@@ -197,9 +208,10 @@ const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeo
 async function getProfile() {
   const ref = db.collection("users").doc(S.user.uid);
   const snap = await ref.get();
-  if (snap.exists) return snap.data();
+  if (snap.exists) { mirror(S.user.uid, snap.data()); return snap.data(); }
   const base = { name: S.pendingName || S.user.displayName || S.user.email.split("@")[0], email: S.user.email, status: "none", plan: null, expiresAt: 0 };
   await ref.set(base);
+  mirror(S.user.uid, base);
   return base;
 }
 async function loadMovies() {
@@ -293,7 +305,7 @@ function plans() {
   <div class="plans">${CONFIG.plans.map(p => `<div class="plan ${p.id === "standard" ? "hot" : ""}">
     <h3>${p.name}</h3><div class="price">${fmt(p.price)}<small> / ${p.days} din</small></div>
     <ul><li>Quality: ${p.quality}</li><li>Screens: ${p.screens}</li><li>Mobile, TV aur laptop</li></ul>
-    <button class="btn r full" ${st === "pending" ? "disabled" : ""} onclick="pay('${p.id}')">Subscribe</button>
+    <button class="btn r full" ${st === "pending" || S.profile?.canSubscribe === false ? "disabled" : ""} onclick="pay('${p.id}')">Subscribe</button>
   </div>`).join("")}</div></div>`;
 }
 function account() {
@@ -347,6 +359,7 @@ function locked() {
 }
 function pay(pid) {
   if (!S.user) return go("#/login");
+  if (S.profile?.canSubscribe === false) return toast("Aap ki subscription abhi band hai. Admin se rabta karein.");
   selPlan = planOf(pid); selMethod = null;
   openM(`<div class="box"><button class="x" onclick="closeM()">×</button>
     <div class="pad"><h2>${selPlan.name} plan: ${fmt(selPlan.price)}</h2>
@@ -384,6 +397,7 @@ async function submitPay(e) {
       phone, plan: selPlan.id, amount: selPlan.price, method: selMethod, txnId: txn, status: "pending", createdAt: Date.now()
     });
     await db.collection("users").doc(uid).update({ status: "pending", plan: selPlan.id, pendingTxn: txn });
+    mirror(uid, { status: "pending", plan: selPlan.id, pendingTxn: txn });
     S.profile = { ...(S.profile || {}), status: "pending", plan: selPlan.id };
     closeM();
     toast("Payment submit ho gayi. Admin approve karega to videos khul jayengi.");
@@ -401,6 +415,7 @@ function render() {
   const authed = !!S.user;
   const r = (location.hash.match(/#\/(\w+)/) || [, "browse"])[1];
   $("#nav").innerHTML = authed ? nav(r) : "";
+  if (S.user && S.profile && BLOCKED.includes(S.profile.blocked)) { $("#nav").innerHTML = ""; $("#app").innerHTML = blockedView(); return; }
   if (!authed) { $("#app").innerHTML = loginPage(); return; }
   const pages = { browse, plans, account };
   $("#app").innerHTML = (pages[r] || browse)();
@@ -411,6 +426,7 @@ function boot() {
     auth = firebase.auth();
     db = firebase.firestore();
     db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+    rtdb = firebase.database();
   } catch (e) { initError = e.message; console.error(e); }
   window.onscroll = () => $("#nav").classList.toggle("solid", scrollY > 40);
   window.onhashchange = render;
