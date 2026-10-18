@@ -118,9 +118,9 @@ const CONFIG = {
   // Yahan apne asli payment numbers daalein
   payment: {
     title: "Account Title",
-    easypaisa: "03XX-XXXXXXX",
-    jazzcash: "03XX-XXXXXXX",
-    zindagi: "03XX-XXXXXXX"
+    easypaisa: "Malook Hussain, 0342-3944508",
+    jazzcash: "Saima Jabeen,  0328-5719803",
+    zindagi: "Sima Jabeen,    0342-3944508"
   },
   plans: [
     { id: "basic", name: "Basic", price: 300, days: 30, quality: "720p", screens: 1 },
@@ -239,7 +239,7 @@ async function doAuth(e) {
   e.preventDefault();
   const f = e.target;
   const val = n => f.querySelector(`[name=${n}]`)?.value.trim() || "";
-  if (!auth) return showErr("Firebase start nahi hua: " + initError);
+  if (!auth) return showErr("FB not yet start: " + initError);
   try {
     if (mode === "up") {
       S.pendingName = val("name");
@@ -268,10 +268,10 @@ function loginPage() {
     <h1>${up ? "Sign Up" : "Sign In"}</h1>
     ${up ? '<input name="name" placeholder="Naam" required>' : ""}
     <input name="email" type="email" placeholder="Email" required>
-    <input name="pw" type="password" placeholder="Password (kam az kam 6)" required minlength="6">
+    <input name="pw" type="password" placeholder="Password (minimum 6 charcters required)" required minlength="6">
     <button class="btn r full" type="submit">${up ? "Sign Up" : "Sign In"}</button>
     <p class="err" id="msg"></p>
-    <p class="sub">${up ? 'Account hai? <a onclick="setMode(\'in\')">Sign in karein</a>' : 'Naye ho? <a onclick="setMode(\'up\')">Sign up karein</a>'}</p>
+    <p class="sub">${up ? 'Account available? <a onclick="setMode(\'in\')">Get sign in </a>' : 'New user? <a onclick="setMode(\'up\')">Get Sign up </a>'}</p>
   </form></div>`;
 }
 function card(m) {
@@ -281,9 +281,9 @@ function browse() {
   const h = S.movies[0];
   const st = subState();
   const notice = {
-    none: '<b>Videos dekhne ke liye plan subscribe karein</b>Thumbnails aur details mufat hain. Play karne ke liye plan lein.',
-    pending: '<b>Payment verify ho rahi hai</b>Admin approve karte hi aap videos dekh saken ge.',
-    expired: '<b>Aap ka plan expire ho chuka hai</b>Videos dekhne ke liye dobara subscribe karein.',
+    none: '<b>subscribe Plan</b>For Play video subription must.',
+    pending: '<b>Payment verifiying by admin</b>Please wait while approval from Admin.',
+    expired: '<b>Your monthly plan has been exipred</b>Please re-subscribe first.',
     active: ""
   }[st];
   const cats = [...new Set(S.movies.map(m => m.cat || "Popular"))];
@@ -298,10 +298,10 @@ function browse() {
 function plans() {
   const st = subState();
   return `<div class="page"><h1>Apna plan chunein</h1>
-  <p class="sub">Har plan ${CONFIG.plans[0].days} din ke liye hai. Plan khatam hone par videos band ho jayengi.</p>
-  ${st === "pending" ? '<div class="note">Aap ki payment verify ho rahi hai. Approve hote hi videos khul jayengi.</div>' : ""}
-  ${st === "active" ? `<div class="note ok">Aap ka <b>${esc(planName(S.profile.plan))}</b> plan ${dt(S.profile.expiresAt)} tak active hai.</div>` : ""}
-  <div class="acts" style="margin-top:16px"><button class="btn g" onclick="refreshStatus()">Status check karein</button></div>
+  <p class="sub">Har plan ${CONFIG.plans[0].days} for days. you can't play video after expir plan.</p>
+  ${st === "pending" ? '<div class="note">your payment varifing please wait until apporoval by Admin.</div>' : ""}
+  ${st === "active" ? `<div class="note ok">Aap ka <b>${esc(planName(S.profile.plan))}</b> plan ${dt(S.profile.expiresAt)} active upto.</div>` : ""}
+  <div class="acts" style="margin-top:16px"><button class="btn g" onclick="refreshStatus()">Check status</button></div>
   <div class="plans">${CONFIG.plans.map(p => `<div class="plan ${p.id === "standard" ? "hot" : ""}">
     <h3>${p.name}</h3><div class="price">${fmt(p.price)}<small> / ${p.days} din</small></div>
     <ul><li>Quality: ${p.quality}</li><li>Screens: ${p.screens}</li><li>Mobile, TV aur laptop</li></ul>
@@ -351,7 +351,7 @@ function play(id) {
 }
 function locked() {
   const st = subState();
-  const t = st === "expired" ? "Aap ka plan expire ho gaya hai" : st === "pending" ? "Aap ki payment verify ho rahi hai" : "Ye video dekhne ke liye subscription chahiye";
+  const t = st === "expired" ? "Aap ka plan expire ho gaya hai" : st === "pending" ? "your payment is being verify" : "subscription rekuired";
   openM(`<div class="box"><button class="x" onclick="closeM()">×</button>
     <div class="pad" style="text-align:center"><h2>${t}</h2>
     <p class="sub">Thumbnails aur details dekhte rahein. Play karne ke liye plan lein.</p>
@@ -359,7 +359,7 @@ function locked() {
 }
 function pay(pid) {
   if (!S.user) return go("#/login");
-  if (S.profile?.canSubscribe === false) return toast("Aap ki subscription abhi band hai. Admin se rabta karein.");
+  if (S.profile?.canSubscribe === false) return toast("Your subscroipton locked please contact with admin.");
   selPlan = planOf(pid); selMethod = null;
   openM(`<div class="box"><button class="x" onclick="closeM()">×</button>
     <div class="pad"><h2>${selPlan.name} plan: ${fmt(selPlan.price)}</h2>
@@ -389,7 +389,7 @@ async function submitPay(e) {
   const f = e.target;
   const val = n => f.querySelector(`[name=${n}]`).value.trim();
   const txn = val("txn"), phone = val("phone");
-  if (txn.length < 5) return showErr("Transaction ID kam az kam 5 characters ki honi chahiye.");
+  if (txn.length < 5) return showErr("5 charactors must be of transaction ID.");
   const uid = S.user.uid;
   try {
     await db.collection("payments").add({
