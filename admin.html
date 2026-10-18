@@ -142,7 +142,7 @@ const subLabel = { active: "Active", pending: "Pending", expired: "Expired", non
 function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("on"); setTimeout(() => el.classList.remove("on"), 3200); }
 function openM(html) { $("#modal").innerHTML = html; $("#modal").classList.add("on"); }
 function closeM() { $("#modal").classList.remove("on"); }
-const gradOf = m => m.thumb ? `url("${m.thumb}") center/cover` : `linear-gradient(135deg,${esc(m.c1 || "#333")},${esc(m.c2 || "#111")})`;
+const gradOf = m => m.thumb ? `url('${esc(m.thumb)}') center/cover` : `linear-gradient(135deg,${esc(m.c1 || "#333")},${esc(m.c2 || "#111")})`;
 function friendly(err) {
   const map = {
     "auth/invalid-credential": "Email ya password galat hai.",
