@@ -8,6 +8,8 @@
 <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script async defer src="https://accounts.google.com/gsi/client"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{color-scheme:dark}
@@ -111,12 +113,15 @@ const CONFIG = {
     { id: "standard", name: "Standard", price: 500, days: 30 },
     { id: "premium", name: "Premium", price: 800, days: 30 }
   ],
-  categories: ["Trending Now", "Action & Thrillers", "Comedies", "Drama", "Horror", "Sci-Fi"]
+  categories: ["Trending Now", "Action & Thrillers", "Comedies", "Drama", "Horror", "Sci-Fi"],
+  // Google Cloud Console se Web OAuth Client ID yahan paste karein
+  googleClientId: "PASTE_CLIENT_ID.apps.googleusercontent.com",
+  rtdbUrl: "https://cineflix-871ed-default-rtdb.firebaseio.com"
 };
 const DAY = 864e5;
 
 /* ===================== FIREBASE (boot() mein start hota hai) ===================== */
-let auth = null, db = null, initError = "";
+let auth = null, db = null, rtdb = null, initError = "";
 const DEL = () => firebase.firestore.FieldValue.delete();
 
 /* ===================== HELPERS ===================== */
@@ -137,7 +142,7 @@ const subLabel = { active: "Active", pending: "Pending", expired: "Expired", non
 function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("on"); setTimeout(() => el.classList.remove("on"), 3200); }
 function openM(html) { $("#modal").innerHTML = html; $("#modal").classList.add("on"); }
 function closeM() { $("#modal").classList.remove("on"); }
-const gradOf = m => `linear-gradient(135deg,${esc(m.c1 || "#333")},${esc(m.c2 || "#111")})`;
+const gradOf = m => m.thumb ? `url("${m.thumb}") center/cover` : `linear-gradient(135deg,${esc(m.c1 || "#333")},${esc(m.c2 || "#111")})`;
 function friendly(err) {
   const map = {
     "auth/invalid-credential": "Email ya password galat hai.",
@@ -170,7 +175,7 @@ async function loadAll() {
   S.movies = await loadOne("movies", db.collection("movies").get());
 }
 async function refresh() {
-  try { await withTimeout(loadAll(), 10000); render(); toast("Data refresh ho gaya"); }
+  try { await withTimeout(loadAll(), 10000); await backfillRtdb(); render(); toast("Data refresh ho gaya"); }
   catch (e) { toast(friendly(e)); }
 }
 
@@ -245,7 +250,7 @@ function titleForm(id) {
   const m = id ? S.movies.find(x => x.id === id) : {};
   openM(`<div class="box"><form class="pad" onsubmit="saveTitle(event,'${esc(id || "")}')">
     <h2>${id ? "Title edit karein" : "Naya title add karein"}</h2>
-    <label>Title</label><input name="title" required value="${esc(m.title)}">
+    <label>Title</label><input name="title" required value="${esc(m.title || S.pendingName || "")}">
     <div class="two">
       <div><label>Saal</label><input name="year" type="number" value="${esc(m.year || 2026)}"></div>
       <div><label>Rating</label><select name="rating">${["G", "PG", "PG-13", "TV-PG", "TV-14", "TV-MA", "R"].map(r => `<option ${m.rating === r ? "selected" : ""}>${r}</option>`).join("")}</select></div>
@@ -255,7 +260,12 @@ function titleForm(id) {
       <div><label>Thumbnail rang 2</label><input name="c2" type="color" value="${esc(m.c2 || "#1f1c18")}"></div>
     </div>
     <label>Description</label><textarea name="desc" rows="3">${esc(m.desc)}</textarea>
-    <label>Video link (Google Drive share link)</label><input name="videoUrl" value="${esc(m.videoUrl)}" placeholder="https://drive.google.com/file/d/XXXX/view?usp=sharing">
+    <label>Video link (Google Drive share link)</label><input name="videoUrl" value="${esc(m.videoUrl || S.pendingLink || "")}" placeholder="https://drive.google.com/file/d/XXXX/view?usp=sharing">
+    <div class="acts" style="margin-bottom:12px"><button type="button" class="btn g sm" onclick="togglePicker()">Google Drive se select</button><span class="note" style="margin:0">Permission auto-share: ${loadShare() ? "ON" : "OFF"}</span></div>
+    <div id="pbox" style="display:none"><input placeholder="Video ka naam search karein" oninput="filterPicker(this.value)"><div id="plist" style="max-height:260px;overflow:auto;margin-bottom:12px">${pickerRows()}</div></div>
+    <label>Thumbnail (device se image)</label><input name="thumbFile" type="file" accept="image/*" onchange="thumbChosen(this)">
+    <label>Ya thumbnail image ka URL</label><input name="thumbUrl" placeholder="https://... (optional)" value="${esc(m.thumb && !m.thumb.startsWith("data:") ? m.thumb : "")}">
+    <img id="thumbPrev" src="${esc(m.thumb || "")}" style="${m.thumb ? "display:block" : "display:none"};width:100%;max-height:140px;object-fit:cover;border-radius:4px;margin-bottom:12px">
     <p class="note">Drive par video ko "Anyone with the link" (Viewer) par share karke link yahan paste karein. Khali chhodne par user ko "upload nahi hui" dikhega.</p>
     <div class="acts"><button class="btn r" type="submit">Save karein</button><button class="btn g" type="button" onclick="closeM()">Cancel</button></div>
   </form></div>`);
@@ -264,7 +274,7 @@ async function saveTitle(e, id) {
   e.preventDefault();
   const f = e.target;
   const g = n => f.querySelector(`[name=${n}]`).value.trim();
-  const data = { title: g("title"), year: Number(g("year")) || 0, rating: g("rating"), genre: g("genre"), cat: g("cat"), c1: g("c1"), c2: g("c2"), desc: g("desc"), videoUrl: g("videoUrl"), updatedAt: Date.now() };
+  const data = { title: g("title"), year: Number(g("year")) || 0, rating: g("rating"), genre: g("genre"), cat: g("cat"), c1: g("c1"), c2: g("c2"), desc: g("desc"), videoUrl: g("videoUrl"), thumb: f.dataset.thumb || g("thumbUrl") || ((S.movies.find(x => x.id === id) || {}).thumb || ""), updatedAt: Date.now() };
   try {
     if (id) await db.collection("movies").doc(id).update(data);
     else await db.collection("movies").add({ ...data, createdAt: Date.now() });
@@ -363,8 +373,8 @@ function errBanner() {
 }
 function shellView() {
   const pendingCount = S.payments.filter(p => p.status === "pending").length;
-  const items = [["dash", "Dashboard"], ["pay", "Payments", pendingCount], ["subs", "Subscribers"], ["titles", "Titles"]];
-  const page = { dash: dashPage, pay: paymentsPage, subs: subsPage, titles: titlesPage }[S.tab];
+  const items = [["dash", "Dashboard"], ["pay", "Payments", pendingCount], ["users", "Users (RTDB)"], ["subs", "Subscribers"], ["titles", "Titles"], ["drive", "Google Drive"]];
+  const page = { dash: dashPage, pay: paymentsPage, users: usersPage, subs: subsPage, titles: titlesPage, drive: drivePage }[S.tab];
   return `<div class="shell"><aside class="side">
     <div class="logo">${CONFIG.brand}<small>ADMIN PANEL</small></div>
     ${items.map(([k, l, c]) => `<button class="nb ${S.tab === k ? "on" : ""}" onclick="setTab('${k}')"><span>${l}</span>${c ? `<span class="badge">${c}</span>` : ""}</button>`).join("")}
@@ -388,14 +398,17 @@ function startLive() {
   }, e => console.error("payments live", e));
   db.collection("users").onSnapshot(s => {
     S.users = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    backfillRtdb().catch(e => console.error("backfill", e));
     render();
   }, e => console.error("users live", e));
+  startUsersLive();
 }
 function boot() {
   try {
-    firebase.initializeApp(CONFIG.firebase);
+    firebase.initializeApp({ ...CONFIG.firebase, databaseURL: CONFIG.rtdbUrl });
     auth = firebase.auth();
     db = firebase.firestore();
+    rtdb = firebase.database();
   } catch (e) { initError = e.message; console.error(e); }
   render();
   if (!auth) { S.ready = true; return render(); }
@@ -405,6 +418,7 @@ function boot() {
       try {
         if (await withTimeout(isAdmin(u.uid), 8000)) {
           S.admin = u;
+          await ensureRtdbAdmin(u.uid);
           await withTimeout(loadAll(), 10000);
           startLive();
         } else {
@@ -416,6 +430,213 @@ function boot() {
     render();
   });
 }
+/* ===================== RTDB ADMIN NODE (khud banta hai) ===================== */
+async function ensureRtdbAdmin(uid) {
+  try {
+    const ref = rtdb.ref("admins/" + uid);
+    const snap = await ref.once("value");
+    if (snap.val() !== true) await ref.set(true);
+  } catch (e) {
+    console.error("RTDB admin node", e);
+    toast("RTDB admin node: " + e.message);
+  }
+}
+
+/* ===================== REALTIME DATABASE: USERS ===================== */
+function startUsersLive() {
+  rtdb.ref("users").on("value", s => {
+    const v = s.val() || {};
+    S.rUsers = Object.entries(v).map(([id, x]) => ({ id, ...x }));
+    render();
+  }, e => toast("RTDB: " + e.message));
+}
+async function backfillRtdb() {
+  const ups = {};
+  S.users.forEach(u => { const { id, ...d } = u; ups[id] = d; });
+  if (Object.keys(ups).length) await rtdb.ref("users").update(ups);
+}
+async function refreshUsers() {
+  try {
+    await withTimeout(loadAll(), 10000);
+    await backfillRtdb();
+    toast(`${S.users.length} users sync ho gaye`);
+    render();
+  } catch (e) { toast(friendly(e)); }
+}
+async function saveUser(uid, patch) {
+  await db.collection("users").doc(uid).update(patch);
+  await rtdb.ref("users/" + uid).update(patch);
+}
+async function setBlock(uid, val) {
+  const msg = val ? `Is user ko ${val} karein?` : "Is user ko dobara active karein?";
+  if (!confirm(msg)) return;
+  try { await saveUser(uid, { blocked: val }); toast("Status update ho gaya"); }
+  catch (e) { toast(friendly(e)); }
+}
+async function deleteUserPermanent(uid) {
+  if (!confirm("Ye user ka profile, payments aur RTDB data permanent delete karega. Login record Firebase Auth mein reh jayega lekin use koi access nahi milega. Pakka?")) return;
+  try {
+    const pays = await db.collection("payments").where("uid", "==", uid).get();
+    const b = db.batch();
+    pays.docs.forEach(d => b.delete(d.ref));
+    b.update(db.collection("users").doc(uid), { blocked: "deleted", name: "Deleted user", email: "", status: "none", plan: null, expiresAt: 0, canSubscribe: false, canWatch: false, pendingTxn: DEL() });
+    await b.commit();
+    await rtdb.ref("users/" + uid).remove();
+    toast("User ka data permanent delete ho gaya");
+  } catch (e) { toast(friendly(e)); }
+}
+function userForm(uid) {
+  const u = (S.rUsers || []).find(x => x.id === uid) || {};
+  const d = u.expiresAt ? new Date(u.expiresAt).toISOString().slice(0, 10) : "";
+  openM(`<div class="box"><form class="pad" onsubmit="saveUserForm(event,'${esc(uid)}')">
+    <h2>User control: ${esc(u.name || u.email || uid)}</h2>
+    <div class="two">
+      <div><label>Naam</label><input name="name" value="${esc(u.name)}"></div>
+      <div><label>Plan</label><select name="plan"><option value="">Koi nahi</option>${CONFIG.plans.map(p => `<option value="${p.id}" ${u.plan === p.id ? "selected" : ""}>${p.name}</option>`).join("")}</select></div>
+      <div><label>Status</label><select name="status">${["none", "pending", "active"].map(s => `<option ${u.status === s ? "selected" : ""}>${s}</option>`).join("")}</select></div>
+      <div><label>Expiry date</label><input name="exp" type="date" value="${d}"></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><input type="checkbox" name="canSubscribe" style="width:auto;margin:0" ${u.canSubscribe === false ? "" : "checked"}> Subscribe karne ki ijazat</label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><input type="checkbox" name="canWatch" style="width:auto;margin:0" ${u.canWatch === false ? "" : "checked"}> Videos dekhne ki ijazat</label>
+    <div class="acts" style="margin-top:14px"><button class="btn r" type="submit">Save karein</button><button class="btn g" type="button" onclick="closeM()">Cancel</button></div>
+  </form></div>`);
+}
+async function saveUserForm(e, uid) {
+  e.preventDefault();
+  const f = e.target, v = n => f.querySelector(`[name=${n}]`);
+  const exp = v("exp").value ? new Date(v("exp").value + "T23:59:59").getTime() : 0;
+  try {
+    await saveUser(uid, { name: v("name").value.trim(), plan: v("plan").value || null, status: v("status").value, expiresAt: exp, canSubscribe: v("canSubscribe").checked, canWatch: v("canWatch").checked });
+    closeM();
+    toast("User update ho gaya");
+  } catch (err) { toast(friendly(err)); }
+}
+function usersPage() {
+  const rows = (S.rUsers || []).map(u => {
+    const b = u.blocked || "";
+    const live = u.status === "active" && u.expiresAt > Date.now();
+    const st = b || (live ? "active" : (u.status || "none"));
+    const pillCls = b ? "p-rejected" : live ? "p-active" : u.status === "pending" ? "p-pending" : "p-none";
+    return `<tr>
+    <td>${esc(u.name || "-")}<small>${esc(u.email || "")}</small></td>
+    <td>${esc(planName(u.plan))}</td>
+    <td><span class="pill ${pillCls}">${esc(st)}</span>${u.canWatch === false ? "<small>video band</small>" : ""}${u.canSubscribe === false ? "<small>subscribe band</small>" : ""}</td>
+    <td>${dt(u.expiresAt)}</td>
+    <td><div class="acts">
+      <button class="btn sm g" onclick="userForm('${esc(u.id)}')">Control</button>
+      ${b === "banned" ? `<button class="btn sm g" onclick="setBlock('${esc(u.id)}','')">Unban</button>` : `<button class="btn sm g" onclick="setBlock('${esc(u.id)}','banned')">Ban</button>`}
+      ${b === "sealed" ? `<button class="btn sm g" onclick="setBlock('${esc(u.id)}','')">Unseal</button>` : `<button class="btn sm g" onclick="setBlock('${esc(u.id)}','sealed')">Seal</button>`}
+      <button class="btn sm r" onclick="deleteUserPermanent('${esc(u.id)}')">Permanent delete</button>
+    </div></td></tr>`;
+  }).join("");
+  return `<div class="top"><h1>Users (Realtime DB)</h1><button class="btn g" onclick="refreshUsers()">↻ Refresh (purane users bhi laayein)</button></div>
+  <div class="panel"><div class="tw"><table><tr><th>User</th><th>Plan</th><th>Status</th><th>Expiry</th><th></th></tr>${rows || '<tr><td colspan="5" class="empty">Abhi koi user nahi. Refresh dabayein.</td></tr>'}</table></div></div>`;
+}
+
+/* ===================== GOOGLE DRIVE ===================== */
+function loadShare() { return localStorage.getItem("cf_share") !== "off"; }
+function toggleShare() { localStorage.setItem("cf_share", loadShare() ? "off" : "on"); render(); }
+const driveLink = id => `https://drive.google.com/file/d/${id}/view?usp=sharing`;
+function driveConnect() {
+  if (!window.google || !google.accounts) return toast("Google script abhi load nahi hua. Page refresh karein.");
+  if (!CONFIG.googleClientId || CONFIG.googleClientId.startsWith("PASTE")) return toast("CONFIG mein googleClientId daalein");
+  google.accounts.oauth2.initTokenClient({
+    client_id: CONFIG.googleClientId,
+    scope: "https://www.googleapis.com/auth/drive",
+    callback: r => {
+      if (r.error) return toast("Drive: " + r.error);
+      S.gToken = r.access_token;
+      loadDrive();
+    }
+  }).requestAccessToken();
+}
+async function gFetch(url, opt = {}) {
+  const r = await fetch(url, { ...opt, headers: { Authorization: "Bearer " + S.gToken, ...(opt.headers || {}) } });
+  if (!r.ok) throw new Error("Drive error " + r.status + " (token expire ho gaya ho to dobara connect karein)");
+  return r.status === 204 ? null : r.json();
+}
+async function loadDrive() {
+  try {
+    let files = [], pt = "";
+    const q = encodeURIComponent("mimeType contains 'video/' and trashed = false");
+    do {
+      const d = await gFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=nextPageToken,files(id,name,size)&pageSize=200${pt ? "&pageToken=" + pt : ""}`);
+      files = files.concat(d.files || []);
+      pt = d.nextPageToken || "";
+    } while (pt);
+    S.driveFiles = files.sort((a, b) => a.name.localeCompare(b.name));
+    toast(`${files.length} videos mil gayi`);
+    render();
+  } catch (e) { toast(e.message); }
+}
+async function shareDrive(id) {
+  await gFetch(`https://www.googleapis.com/drive/v3/files/${id}/permissions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ role: "reader", type: "anyone" }) });
+}
+async function shareOne(id) {
+  try { await shareDrive(id); toast("Permission de di gayi: Anyone with the link"); }
+  catch (e) { toast(e.message); }
+}
+function newFromDrive(id) {
+  const f = (S.driveFiles || []).find(x => x.id === id);
+  S.pendingLink = driveLink(id);
+  S.pendingName = f ? f.name.replace(/\.[^.]+$/, "") : "";
+  if (loadShare()) shareDrive(id).catch(e => toast(e.message));
+  titleForm();
+  S.pendingLink = S.pendingName = null;
+}
+function drivePage() {
+  if (!S.gToken) return `<div class="top"><h1>Google Drive</h1></div><div class="panel pad"><p class="note">Drive ki videos dekhne aur permission dene ke liye connect karein.</p><button class="btn r" onclick="driveConnect()">Google Drive connect karein</button></div>`;
+  const list = S.driveFiles || [];
+  const cur = S.preview ? list.find(f => f.id === S.preview) : null;
+  return `<div class="top"><h1>Google Drive</h1><div class="acts"><button class="btn g" onclick="loadDrive()">↻ Videos reload</button><button class="btn g" onclick="toggleShare();">Permission auto-share: ${loadShare() ? "ON" : "OFF"}</button></div></div>
+  ${cur ? `<div class="panel pad"><h2 style="padding:0;border:0">${esc(cur.name)}</h2><iframe src="https://drive.google.com/file/d/${esc(cur.id)}/preview" allow="autoplay; fullscreen" allowfullscreen style="width:100%;aspect-ratio:16/9;border:0;margin-top:12px"></iframe></div>` : ""}
+  <div class="panel"><div class="tabs"><input placeholder="Video dhoondhein..." oninput="filterDrive(this.value)" style="margin:0;max-width:340px"></div>
+  <div class="tw"><table id="dtable"><tr><th>Video</th><th>Size</th><th></th></tr>${list.map(f => `<tr data-n="${esc(f.name.toLowerCase())}"><td>${esc(f.name)}</td><td>${f.size ? (f.size / 1048576).toFixed(1) + " MB" : "-"}</td><td><div class="acts"><button class="btn sm g" onclick="S.preview='${esc(f.id)}';render()">Preview</button><button class="btn sm g" onclick="shareOne('${esc(f.id)}')">Share</button><button class="btn sm r" onclick="newFromDrive('${esc(f.id)}')">Title banayein</button></div></td></tr>`).join("") || '<tr><td colspan="3" class="empty">Koi video nahi</td></tr>'}</table></div></div>`;
+}
+function filterDrive(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll("#dtable tr[data-n]").forEach(r => { r.style.display = r.dataset.n.includes(q) ? "" : "none"; });
+}
+function pickerRows() {
+  if (!S.driveFiles) return '<p class="note">Pehle "Google Drive" tab se connect karke videos load karein.</p>';
+  return S.driveFiles.map(f => `<div data-n="${esc(f.name.toLowerCase())}" onclick="pickFile('${esc(f.id)}')" style="padding:10px;border:1px solid #444;border-radius:4px;margin-bottom:6px;cursor:pointer">${esc(f.name)}</div>`).join("") || '<p class="note">Koi video nahi mili.</p>';
+}
+function togglePicker() { const b = document.getElementById("pbox"); b.style.display = b.style.display === "none" ? "block" : "none"; }
+function filterPicker(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll("#plist [data-n]").forEach(r => { r.style.display = r.dataset.n.includes(q) ? "" : "none"; });
+}
+async function pickFile(id) {
+  const f = (S.driveFiles || []).find(x => x.id === id);
+  if (!f) return;
+  const form = document.querySelector("#modal form");
+  form.querySelector("[name=videoUrl]").value = driveLink(id);
+  const t = form.querySelector("[name=title]");
+  if (!t.value) t.value = f.name.replace(/\.[^.]+$/, "");
+  if (loadShare()) {
+    try { await shareDrive(id); toast("Video select hui, permission ON"); }
+    catch (e) { toast(e.message); }
+  } else toast("Video select hui (permission OFF)");
+}
+
+/* ===================== THUMBNAIL ===================== */
+function thumbChosen(inp) {
+  const file = inp.files[0];
+  if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    const w = 480, h = Math.round(img.height * w / img.width);
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    c.getContext("2d").drawImage(img, 0, 0, w, h);
+    const url = c.toDataURL("image/jpeg", 0.8);
+    document.querySelector("#modal form").dataset.thumb = url;
+    const p = document.getElementById("thumbPrev");
+    p.src = url; p.style.display = "block";
+  };
+  img.src = URL.createObjectURL(file);
+}
+
 window.addEventListener("load", boot);
 </script>
 </body>
