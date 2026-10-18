@@ -175,7 +175,7 @@ async function loadAll() {
   S.movies = await loadOne("movies", db.collection("movies").get());
 }
 async function refresh() {
-  try { await withTimeout(loadAll(), 10000); await backfillRtdb(); render(); toast("Data refresh ho gaya"); }
+  try { await withTimeout(loadAll(), 10000); await backfillRtdb(); render(); toast("Data refresh Success"); }
   catch (e) { toast(friendly(e)); }
 }
 
@@ -184,12 +184,12 @@ async function isAdmin(uid) { return (await db.collection("admins").doc(uid).get
 async function login(e) {
   e.preventDefault();
   const f = e.target;
-  if (!auth) return showErr("Firebase start nahi hua: " + initError);
+  if (!auth) return showErr("FB start nahi hua: " + initError);
   try {
     const c = await auth.signInWithEmailAndPassword(f.querySelector("[name=email]").value.trim(), f.querySelector("[name=pw]").value);
     if (!(await withTimeout(isAdmin(c.user.uid), 8000))) {
       await auth.signOut();
-      showErr("Ye account admin nahi hai. Firestore mein admins collection check karein.");
+      showErr("Sorry this account is not config as a Admin. Please check your credential.");
     }
   } catch (err) { showErr(friendly(err)); }
 }
@@ -284,10 +284,10 @@ async function saveTitle(e, id) {
   } catch (err) { toast(friendly(err)); }
 }
 async function deleteTitle(id) {
-  if (!confirm("Ye title hamesha ke liye delete karein?")) return;
+  if (!confirm("Delte title for permanantly?")) return;
   try {
     await db.collection("movies").doc(id).delete();
-    toast("Title delete ho gaya");
+    toast("Title has been deleted");
     await refresh();
   } catch (e) { toast(friendly(e)); }
 }
@@ -360,7 +360,7 @@ function setPtab(t) { S.ptab = t; render(); }
 function loginView() {
   return `<div class="login"><form class="lcard" onsubmit="login(event)">
     <div class="logo" style="margin-bottom:24px">${CONFIG.brand} <span style="color:#b3b3b3;font-size:14px;font-weight:400">ADMIN</span></div>
-    <h1>Admin Sign In</h1><p class="note" style="margin-bottom:22px">Sirf admins ke liye</p>
+    <h1>Admin Sign In</h1><p class="note" style="margin-bottom:22px">only for admins</p>
     <label>Email</label><input name="email" type="email" required>
     <label>Password</label><input name="pw" type="password" required>
     <p id="err" class="err"></p>
