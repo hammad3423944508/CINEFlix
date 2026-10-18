@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ur">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CINEFLIX</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{color-scheme:dark}
+body{background:#141414;color:#fff;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;overflow-x:hidden}
+a{color:inherit;text-decoration:none;cursor:pointer}
+button,input{font:inherit}
+input{display:block;width:100%;padding:14px 16px;margin-bottom:12px;background:#333;border:0;border-radius:4px;color:#fff;font-size:16px}
+hr{border:0;border-top:1px solid #444;margin:20px 0}
+.nav{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;align-items:center;gap:24px;padding:16px 4%;background:linear-gradient(#000c,#0000);transition:background .3s}
+.nav.solid{background:#141414}
+.logo{color:#E50914;font-weight:900;font-size:28px;letter-spacing:1px;cursor:pointer}
+.nav .l{font-size:14px;color:#e5e5e5;cursor:pointer}
+.nav .l:hover,.nav .act{color:#b3b3b3}
+.right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.av{width:32px;height:32px;border-radius:4px;background:#E50914;display:grid;place-items:center;font-weight:700;cursor:pointer}
+.hero{height:82vh;min-height:460px;position:relative;display:flex;align-items:flex-end;padding:0 4% 12vh}
+.hero:after{content:"";position:absolute;inset:0;background:linear-gradient(#14141400 40%,#141414 100%),linear-gradient(90deg,#141414e0,#0000 60%)}
+.hero>div{position:relative;z-index:1;max-width:560px}
+.hero h1{font-size:clamp(32px,5vw,56px);font-weight:800;margin-bottom:14px}
+.hero p{font-size:clamp(14px,1.6vw,18px);line-height:1.4;margin-bottom:20px;color:#e5e5e5}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 24px;border:0;border-radius:4px;font-weight:700;font-size:16px;cursor:pointer;background:#fff;color:#000}
+.btn.g{background:#6d6d6eb3;color:#fff}
+.btn.r{background:#E50914;color:#fff}
+.btn:hover{opacity:.8}
+.btn:disabled{opacity:.4;cursor:default}
+.full{width:100%;justify-content:center}
+.btns{display:flex;gap:10px;flex-wrap:wrap}
+.row{padding:0 4%;margin:10px 0 36px}
+.row h2{font-size:20px;font-weight:700;margin-bottom:8px}
+.track{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:10px 0}
+.card{flex:0 0 min(220px,42vw);aspect-ratio:16/9;border-radius:4px;position:relative;cursor:pointer;transition:transform .3s;display:flex;align-items:flex-end;padding:10px}
+.card:hover{transform:scale(1.08);z-index:2;box-shadow:0 8px 30px #000}
+.card span{font-weight:700;font-size:15px;text-shadow:0 1px 3px #000}
+.notice{margin:-6vh 4% 24px;position:relative;z-index:2;padding:16px 20px;background:#2a2a2a;border-left:4px solid #E5B109;border-radius:4px}
+.notice b{display:block;margin-bottom:6px}
+.modal{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;padding:16px;overflow:auto;background:#000b}
+.modal.on{display:flex}
+.box{background:#181818;border-radius:8px;width:min(640px,100%);max-height:92vh;overflow:auto;position:relative;box-shadow:0 10px 40px #000}
+.x{position:absolute;right:12px;top:10px;background:#181818;border:0;color:#fff;font-size:22px;cursor:pointer;z-index:2;width:36px;height:36px;border-radius:50%}
+.hd{height:220px;display:flex;align-items:flex-end;padding:20px 28px}
+.hd h2{font-size:30px}
+.pad{padding:28px}
+.sub{color:#b3b3b3;font-size:15px;margin:6px 0 16px;line-height:1.5}
+.meta{color:#b3b3b3;font-size:14px;margin-bottom:10px}
+.err{color:#ff6b6b;font-size:14px;margin-top:8px;min-height:18px}
+.link{background:none;border:0;color:#b3b3b3;cursor:pointer;margin-top:10px;text-decoration:underline}
+.page{padding:110px 4% 60px;max-width:1100px;margin:0 auto}
+.page h1{font-size:clamp(28px,4vw,40px);margin-bottom:8px}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-top:24px}
+.plan{background:#1f1f1f;border-radius:8px;padding:24px;border:2px solid transparent}
+.plan.hot{border-color:#E50914}
+.plan h3{font-size:22px}
+.price{font-size:30px;font-weight:700;margin:8px 0}
+.price small{font-size:14px;color:#b3b3b3;font-weight:400}
+.plan ul{list-style:none;color:#b3b3b3;margin:14px 0 20px;line-height:1.9}
+.note{background:#2a2a2a;border-left:4px solid #E5B109;padding:14px 16px;margin-top:20px;border-radius:4px}
+.note.ok{border-color:#46d369}
+.method{display:block;width:100%;margin-top:10px;padding:14px 16px;background:#2a2a2a;border:1px solid #444;border-radius:6px;color:#fff;cursor:pointer;text-align:left;font-size:17px;font-weight:700}
+.method:hover{border-color:#E50914}
+.acc{background:#000;padding:14px;border-radius:4px;font-size:22px;font-weight:700;margin:8px 0 16px;letter-spacing:1px}
+.acct{background:#181818;border-radius:8px;padding:8px 20px;margin:24px 0}
+.acct>div{padding:14px 0;border-bottom:1px solid #333}
+.acct>div:last-child{border:0}
+.acct b{color:#8c8c8c;font-weight:400;font-size:14px}
+.acct p{font-size:17px;margin-top:4px}
+.acts{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.login{min-height:100vh;background:linear-gradient(#0008,#000e),linear-gradient(135deg,#8e0e00,#141414)}
+.lcard{background:rgba(0,0,0,.78);padding:50px 60px;border-radius:6px;width:min(450px,92%);margin:110px auto 0}
+.lcard h1{font-size:32px;margin-bottom:24px}
+.lcard a{color:#fff;text-decoration:underline}
+.player{position:fixed;inset:0;background:#000;z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+.player.on{display:flex}
+.player .x{top:16px;right:16px}
+.ptitle{position:absolute;top:22px;left:24px;font-size:20px;font-weight:700}
+.player .sub{text-align:center;margin-top:12px}
+.load{height:100vh;background:#141414}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(120px);background:#fff;color:#000;padding:12px 20px;border-radius:4px;font-weight:700;z-index:300;transition:transform .35s;max-width:90%;text-align:center}
+.toast.on{transform:translateX(-50%) translateY(0)}
+footer{text-align:center;color:#757575;font-size:13px;padding:30px 4%;border-top:8px solid #222}
+</style>
+</head>
+<body>
+<nav id="nav" class="nav"></nav>
+<main id="app"><div class="load"></div></main>
+<div id="modal" class="modal" onclick="if(event.target===this)closeM()"></div>
+<div id="player" class="player">
+  <button class="x" onclick="closeP()">×</button>
+  <div class="ptitle" id="pl-title"></div>
+  <div id="pl-box" style="width:min(1000px,100%)"></div>
+  <p class="sub" id="pl-note"></p>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+/* ===================== SETTINGS ===================== */
+const CONFIG = {
+  brand: "CINEFLIX",
+  firebase: {
+    apiKey: "AIzaSyD8SufYEEuMh6EETsnYEseh-DIMg_pBgjM",
+    authDomain: "cineflix-871ed.firebaseapp.com",
+    projectId: "cineflix-871ed",
+    storageBucket: "cineflix-871ed.firebasestorage.app",
+    messagingSenderId: "326134692352",
+    appId: "1:326134692352:web:2ec17bbfc280168c1236e5"
+  },
+  // Yahan apne asli payment numbers daalein
+  payment: {
+    title: "Account Title",
+    easypaisa: "03XX-XXXXXXX",
+    jazzcash: "03XX-XXXXXXX",
+    zindagi: "03XX-XXXXXXX"
+  },
+  plans: [
+    { id: "basic", name: "Basic", price: 300, days: 30, quality: "720p", screens: 1 },
+    { id: "standard", name: "Standard", price: 500, days: 30, quality: "1080p", screens: 2 },
+    { id: "premium", name: "Premium", price: 800, days: 30, quality: "4K + HDR", screens: 4 }
+  ]
+};
+const METHODS = [
+  { k: "easypaisa", n: "Easypaisa" },
+  { k: "jazzcash", n: "JazzCash" },
+  { k: "zindagi", n: "Zindagi" }
+];
+
+/* Jab Firestore "movies" collection khali ho to yeh titles dikhte hain (bina video) */
+const FALLBACK = [
+  { id: "d1", title: "Midnight Protocol", year: 2025, rating: "TV-MA", genre: "Thriller", cat: "Action & Thrillers", desc: "Ek retired agent ko aik purani conspiracy wapas khinch laati hai.", c1: "#8e0e00", c2: "#1f1c18" },
+  { id: "d2", title: "Ocean's Shadow", year: 2024, rating: "PG-13", genre: "Adventure", cat: "Trending Now", desc: "Gehre samundar mein chhupa raaz, aur aik team jo sach dhoondti hai.", c1: "#0b3d5c", c2: "#071a26" },
+  { id: "d3", title: "The Last Signal", year: 2026, rating: "TV-14", genre: "Sci-Fi", cat: "Trending Now", desc: "Door khala se aane wala aik signal sab kuch badal deta hai.", c1: "#2b1055", c2: "#4a6fb5" },
+  { id: "d4", title: "Laugh Track", year: 2023, rating: "TV-PG", genre: "Comedy", cat: "Comedies", desc: "Aik comedy club ki hangama kheez raatein aur adhoori khwahishein.", c1: "#c31432", c2: "#240b36" },
+  { id: "d5", title: "Lahore Nights", year: 2024, rating: "TV-14", genre: "Drama", cat: "Drama", desc: "Do dost, aik purana jhagra, aur aik shehar jo kabhi nahi sota.", c1: "#355c7d", c2: "#6c5b7b" },
+  { id: "d6", title: "Desert Rain", year: 2022, rating: "PG", genre: "Drama", cat: "Drama", desc: "Sukhe sehra mein aik maa ki umeed aur ik aakhri safar.", c1: "#4b6cb7", c2: "#182848" }
+];
+
+/* ===================== FIREBASE ===================== */
+let auth = null, db = null, initError = "";
+try {
+  firebase.initializeApp(CONFIG.firebase);
+  auth = firebase.auth();
+  db = firebase.firestore();
+} catch (e) { initError = e.message; console.error(e); }
+
+/* ===================== STATE & HELPERS ===================== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = n => "Rs " + Number(n || 0).toLocaleString();
+const dt = ms => ms ? new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-";
+const go = h => { location.hash = h; };
+const planOf = id => CONFIG.plans.find(p => p.id === id);
+const planName = id => planOf(id)?.name || "Koi plan nahi";
+let ready = false, mode = "in", selPlan = null, selMethod = null;
+const S = { user: null, profile: null, movies: [], pendingName: "" };
+const find = id => S.movies.find(m => m.id === id) || FALLBACK.find(m => m.id === id);
+const grad = m => `linear-gradient(135deg,${m.c1 || "#333"},${m.c2 || "#111"})`;
+const hasAccess = () => !!S.profile && S.profile.status === "active" && S.profile.expiresAt > Date.now();
+function subState() {
+  const p = S.profile;
+  if (!p) return "none";
+  if (p.status === "pending") return "pending";
+  if (p.status === "active") return p.expiresAt > Date.now() ? "active" : "expired";
+  return "none";
+}
+function toast(t) { const el = $("#toast"); el.textContent = t; el.classList.add("on"); setTimeout(() => el.classList.remove("on"), 3800); }
+function openM(html) { $("#modal").innerHTML = html; $("#modal").classList.add("on"); }
+function closeM() { $("#modal").classList.remove("on"); }
+function closeP() { $("#pl-box").innerHTML = ""; $("#player").classList.remove("on"); }
+function showErr(t) { const el = $("#msg"); if (el) el.textContent = t; }
+function friendly(err) {
+  const map = {
+    "auth/email-already-in-use": "Ye email pehle se registered hai. Sign in karein.",
+    "auth/invalid-credential": "Email ya password galat hai.",
+    "auth/invalid-email": "Email sahi format mein likhein.",
+    "auth/weak-password": "Password kam az kam 6 characters ka rakhein.",
+    "auth/network-request-failed": "Internet connection check karein, ya site ko GitHub Pages par kholein.",
+    "auth/unauthorized-domain": "Ye domain Firebase mein authorized nahi hai. Authentication > Settings > Authorized domains mein add karein."
+  };
+  return map[err.code] || err.message;
+}
+
+/* Google Drive link ya MP4 link ko player ke liye tayar karta hai */
+function embedOf(url) {
+  if (!url) return null;
+  if (/drive\.google\.com/.test(url)) {
+    const m = url.match(/\/d\/([\w-]+)|[?&]id=([\w-]+)/);
+    return m ? { type: "drive", src: `https://drive.google.com/file/d/${m[1] || m[2]}/preview` } : null;
+  }
+  return { type: "video", src: url };
+}
+
+/* ===================== DATA ===================== */
+async function getProfile() {
+  const ref = db.collection("users").doc(S.user.uid);
+  const snap = await ref.get();
+  if (snap.exists) return snap.data();
+  const base = { name: S.pendingName || S.user.displayName || S.user.email.split("@")[0], email: S.user.email, status: "none", plan: null, expiresAt: 0 };
+  await ref.set(base);
+  return base;
+}
+async function loadMovies() {
+  let list = [];
+  try {
+    const s = await db.collection("movies").get();
+    list = s.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) { console.error(e); }
+  S.movies = list.length ? list : FALLBACK;
+}
+async function refreshStatus() {
+  try {
+    if (S.user) {
+      const s = await db.collection("users").doc(S.user.uid).get();
+      S.profile = s.exists ? s.data() : null;
+    }
+    toast("Status update ho gaya");
+  } catch (e) { toast(friendly(e)); }
+  render();
+}
+
+/* ===================== AUTH ===================== */
+function setMode(m) { mode = m; render(); }
+async function doAuth(e) {
+  e.preventDefault();
+  const f = e.target;
+  const val = n => f.querySelector(`[name=${n}]`)?.value.trim() || "";
+  if (!auth) return showErr("Firebase start nahi hua: " + initError);
+  try {
+    if (mode === "up") {
+      S.pendingName = val("name");
+      await auth.createUserWithEmailAndPassword(val("email"), f.querySelector("[name=pw]").value);
+    } else {
+      await auth.signInWithEmailAndPassword(val("email"), f.querySelector("[name=pw]").value);
+    }
+  } catch (err) { showErr(friendly(err)); }
+}
+async function signOut() {
+  await auth.signOut();
+  S.user = null; S.profile = null;
+  go("#/login"); render();
+}
+
+/* ===================== PAGES ===================== */
+function nav(r) {
+  return `<div class="logo" onclick="go('#/browse')">${CONFIG.brand}</div>
+  <a class="l ${r === "browse" ? "act" : ""}" onclick="go('#/browse')">Home</a>
+  <a class="l ${r === "plans" ? "act" : ""}" onclick="go('#/plans')">Plans</a>
+  <div class="right"><div class="av" onclick="go('#/account')">${esc((S.profile?.name || "G")[0].toUpperCase())}</div></div>`;
+}
+function loginPage() {
+  const up = mode === "up";
+  return `<div class="login"><form class="lcard" onsubmit="doAuth(event)">
+    <h1>${up ? "Sign Up" : "Sign In"}</h1>
+    ${up ? '<input name="name" placeholder="Naam" required>' : ""}
+    <input name="email" type="email" placeholder="Email" required>
+    <input name="pw" type="password" placeholder="Password (kam az kam 6)" required minlength="6">
+    <button class="btn r full" type="submit">${up ? "Sign Up" : "Sign In"}</button>
+    <p class="err" id="msg"></p>
+    <p class="sub">${up ? 'Account hai? <a onclick="setMode(\'in\')">Sign in karein</a>' : 'Naye ho? <a onclick="setMode(\'up\')">Sign up karein</a>'}</p>
+  </form></div>`;
+}
+function card(m) {
+  return `<div class="card" style="background:${grad(m)}" onclick="detail('${esc(m.id)}')"><span>${esc(m.title)}</span></div>`;
+}
+function browse() {
+  const h = S.movies[0];
+  const st = subState();
+  const notice = {
+    none: '<b>Videos dekhne ke liye plan subscribe karein</b>Thumbnails aur details mufat hain. Play karne ke liye plan lein.',
+    pending: '<b>Payment verify ho rahi hai</b>Admin approve karte hi aap videos dekh saken ge.',
+    expired: '<b>Aap ka plan expire ho chuka hai</b>Videos dekhne ke liye dobara subscribe karein.',
+    active: ""
+  }[st];
+  const cats = [...new Set(S.movies.map(m => m.cat || "Popular"))];
+  return `<section class="hero" style="background:${grad(h)}"><div>
+    <h1>${esc(h.title)}</h1><p>${esc(h.desc)}</p>
+    <div class="btns"><button class="btn" onclick="play('${esc(h.id)}')">▶ Play</button>
+    <button class="btn g" onclick="detail('${esc(h.id)}')">ⓘ More Info</button></div></div></section>
+    ${notice ? `<div class="notice">${notice}</div>` : ""}
+    ${cats.map(c => `<div class="row"><h2>${esc(c)}</h2><div class="track">${S.movies.filter(m => (m.cat || "Popular") === c).map(card).join("")}</div></div>`).join("")}
+    <footer>${CONFIG.brand}</footer>`;
+}
+function plans() {
+  const st = subState();
+  return `<div class="page"><h1>Apna plan chunein</h1>
+  <p class="sub">Har plan ${CONFIG.plans[0].days} din ke liye hai. Plan khatam hone par videos band ho jayengi.</p>
+  ${st === "pending" ? '<div class="note">Aap ki payment verify ho rahi hai. Approve hote hi videos khul jayengi.</div>' : ""}
+  ${st === "active" ? `<div class="note ok">Aap ka <b>${esc(planName(S.profile.plan))}</b> plan ${dt(S.profile.expiresAt)} tak active hai.</div>` : ""}
+  <div class="acts" style="margin-top:16px"><button class="btn g" onclick="refreshStatus()">Status check karein</button></div>
+  <div class="plans">${CONFIG.plans.map(p => `<div class="plan ${p.id === "standard" ? "hot" : ""}">
+    <h3>${p.name}</h3><div class="price">${fmt(p.price)}<small> / ${p.days} din</small></div>
+    <ul><li>Quality: ${p.quality}</li><li>Screens: ${p.screens}</li><li>Mobile, TV aur laptop</li></ul>
+    <button class="btn r full" ${st === "pending" ? "disabled" : ""} onclick="pay('${p.id}')">Subscribe</button>
+  </div>`).join("")}</div></div>`;
+}
+function account() {
+  const st = subState(), p = S.profile || {};
+  const label = { active: "Active", pending: "Payment verify ho rahi hai", expired: "Expired", none: "Inactive" }[st];
+  return `<div class="page"><h1>Account</h1>
+  <div class="acct">
+    <div><b>Naam</b><p>${esc(p.name || "-")}</p></div>
+    <div><b>Email</b><p>${esc(S.user?.email || "-")}</p></div>
+    <div><b>Plan</b><p>${esc(planName(p.plan))}</p></div>
+    <div><b>Status</b><p>${label}</p></div>
+    ${st === "active" || st === "expired" ? `<div><b>${st === "active" ? "Expiry date" : "Expire hua"}</b><p>${dt(p.expiresAt)}</p></div>` : ""}
+  </div>
+  <div class="acts"><button class="btn g" onclick="refreshStatus()">Status refresh</button>
+  <button class="btn r" onclick="signOut()">Sign out</button></div></div>`;
+}
+
+/* ===================== MODALS & PLAYER ===================== */
+function detail(id) {
+  const m = find(id);
+  openM(`<div class="box"><button class="x" onclick="closeM()">×</button>
+    <div class="hd" style="background:${grad(m)}"><h2>${esc(m.title)}</h2></div>
+    <div class="pad"><div class="meta">${esc(m.year)} · ${esc(m.rating)} · ${esc(m.genre)}</div>
+    <p class="sub" style="color:#e5e5e5">${esc(m.desc)}</p>
+    <div style="margin-top:18px"><button class="btn" onclick="play('${esc(m.id)}')">▶ Play</button></div></div></div>`);
+}
+function play(id) {
+  if (!hasAccess()) return locked();
+  const m = find(id);
+  closeM();
+  $("#pl-title").textContent = m.title;
+  const e = embedOf(m.videoUrl);
+  $("#pl-note").textContent = "";
+  if (!e) {
+    $("#pl-box").innerHTML = "";
+    $("#pl-note").textContent = "Ye video abhi upload nahi hui.";
+  } else if (e.type === "drive") {
+    $("#pl-box").innerHTML = `<iframe src="${esc(e.src)}" allow="autoplay; fullscreen" allowfullscreen style="width:100%;aspect-ratio:16/9;border:0"></iframe>`;
+  } else {
+    $("#pl-box").innerHTML = `<video src="${esc(e.src)}" controls autoplay playsinline style="width:100%;max-height:80vh;background:#000"></video>`;
+  }
+  $("#player").classList.add("on");
+}
+function locked() {
+  const st = subState();
+  const t = st === "expired" ? "Aap ka plan expire ho gaya hai" : st === "pending" ? "Aap ki payment verify ho rahi hai" : "Ye video dekhne ke liye subscription chahiye";
+  openM(`<div class="box"><button class="x" onclick="closeM()">×</button>
+    <div class="pad" style="text-align:center"><h2>${t}</h2>
+    <p class="sub">Thumbnails aur details dekhte rahein. Play karne ke liye plan lein.</p>
+    ${st === "pending" ? "" : '<button class="btn r" onclick="closeM();go(\'#/plans\')">Plans dekhein</button>'}</div></div>`);
+}
+function pay(pid) {
+  if (!S.user) return go("#/login");
+  selPlan = planOf(pid); selMethod = null;
+  openM(`<div class="box"><button class="x" onclick="closeM()">×</button>
+    <div class="pad"><h2>${selPlan.name} plan: ${fmt(selPlan.price)}</h2>
+    <p class="sub">Payment ka tareeqa chunein:</p>
+    ${METHODS.map(m => `<button class="method" onclick="pick('${m.k}')">${m.n}</button>`).join("")}
+    </div></div>`);
+}
+function pick(k) {
+  selMethod = k;
+  const mt = METHODS.find(x => x.k === k);
+  openM(`<div class="box"><button class="x" onclick="closeM()">×</button>
+  <form class="pad" onsubmit="submitPay(event)">
+    <h2>${mt.n} se payment karein</h2>
+    <p class="sub">Is number par <b>${fmt(selPlan.price)}</b> bhejein:</p>
+    <div class="acc">${esc(CONFIG.payment[k])}</div>
+    <p class="sub">Account title: ${esc(CONFIG.payment.title)}</p>
+    <p class="sub">Payment ke baad neeche details bharein:</p>
+    <input name="txn" placeholder="Transaction ID (poori ya aakhri 5 digits)" required minlength="5">
+    <input name="phone" placeholder="Jis number se payment ki" required>
+    <button class="btn r full" type="submit">Payment submit karein</button>
+    <p class="err" id="msg"></p>
+    <button type="button" class="link" onclick="pay('${selPlan.id}')">← Dusra tareeqa chunein</button>
+  </form></div>`);
+}
+async function submitPay(e) {
+  e.preventDefault();
+  const f = e.target;
+  const val = n => f.querySelector(`[name=${n}]`).value.trim();
+  const txn = val("txn"), phone = val("phone");
+  if (txn.length < 5) return showErr("Transaction ID kam az kam 5 characters ki honi chahiye.");
+  const uid = S.user.uid;
+  try {
+    await db.collection("payments").add({
+      uid, email: S.user.email, name: S.profile?.name || S.user.displayName || "-",
+      phone, plan: selPlan.id, amount: selPlan.price, method: selMethod, txnId: txn, status: "pending", createdAt: Date.now()
+    });
+    await db.collection("users").doc(uid).update({ status: "pending", plan: selPlan.id, pendingTxn: txn });
+    S.profile = { ...(S.profile || {}), status: "pending", plan: selPlan.id };
+    closeM();
+    toast("Payment submit ho gayi. Admin approve karega to videos khul jayengi.");
+    render();
+  } catch (err) { showErr(friendly(err)); }
+}
+
+/* ===================== ROUTER ===================== */
+function render() {
+  if (!ready) return;
+  const authed = !!S.user;
+  const r = (location.hash.match(/#\/(\w+)/) || [, "browse"])[1];
+  $("#nav").innerHTML = authed ? nav(r) : "";
+  if (!authed) { $("#app").innerHTML = loginPage(); return; }
+  const pages = { browse, plans, account };
+  $("#app").innerHTML = (pages[r] || browse)();
+}
+async function boot() {
+  await loadMovies();
+  window.onscroll = () => $("#nav").classList.toggle("solid", scrollY > 40);
+  window.onhashchange = render;
+  if (!auth) { ready = true; return render(); }
+  auth.onAuthStateChanged(async u => {
+    S.user = u;
+    S.profile = null;
+    if (u) {
+      try { S.profile = await getProfile(); }
+      catch (e) { console.error(e); toast(friendly(e)); }
+    }
+    ready = true;
+    render();
+  });
+}
+boot();
+</script>
+</body>
+</html>
