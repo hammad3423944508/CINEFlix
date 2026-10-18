@@ -152,15 +152,22 @@ function friendly(err) {
 }
 
 /* ===================== DATA ===================== */
+S.errors = [];
+async function loadOne(name, q) {
+  try {
+    const s = await withTimeout(q, 10000);
+    return s.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    console.error(name, e);
+    S.errors.push(`${name}: ${e.code || ""} ${e.message || ""}`.trim());
+    return [];
+  }
+}
 async function loadAll() {
-  const [u, p, m] = await Promise.all([
-    db.collection("users").get(),
-    db.collection("payments").orderBy("createdAt", "desc").get(),
-    db.collection("movies").get()
-  ]);
-  S.users = u.docs.map(d => ({ id: d.id, ...d.data() }));
-  S.payments = p.docs.map(d => ({ id: d.id, ...d.data() }));
-  S.movies = m.docs.map(d => ({ id: d.id, ...d.data() }));
+  S.errors = [];
+  S.users = await loadOne("users", db.collection("users").get());
+  S.payments = await loadOne("payments", db.collection("payments").orderBy("createdAt", "desc").get());
+  S.movies = await loadOne("movies", db.collection("movies").get());
 }
 async function refresh() {
   try { await withTimeout(loadAll(), 10000); render(); toast("Data refresh ho gaya"); }
@@ -350,6 +357,10 @@ function loginView() {
     <button class="btn r" style="width:100%;justify-content:center;padding:13px" type="submit">Sign In</button>
   </form></div>`;
 }
+function errBanner() {
+  if (!S.errors || !S.errors.length) return "";
+  return `<div class="panel" style="border-left:4px solid #E50914;padding:16px 18px;margin-bottom:20px"><b>Data load nahi hua:</b><br>${S.errors.map(esc).join("<br>")}</div>`;
+}
 function shellView() {
   const pendingCount = S.payments.filter(p => p.status === "pending").length;
   const items = [["dash", "Dashboard"], ["pay", "Payments", pendingCount], ["subs", "Subscribers"], ["titles", "Titles"]];
@@ -358,7 +369,7 @@ function shellView() {
     <div class="logo">${CONFIG.brand}<small>ADMIN PANEL</small></div>
     ${items.map(([k, l, c]) => `<button class="nb ${S.tab === k ? "on" : ""}" onclick="setTab('${k}')"><span>${l}</span>${c ? `<span class="badge">${c}</span>` : ""}</button>`).join("")}
     <div class="bottom"><button class="btn g" style="width:100%" onclick="signOut()">Sign out</button></div>
-  </aside><main class="main">${page()}</main></div>`;
+  </aside><main class="main">${errBanner()}${page()}</main></div>`;
 }
 function render() {
   if (!S.ready) {
@@ -367,12 +378,24 @@ function render() {
   }
   $("#root").innerHTML = S.admin ? shellView() : loginView();
 }
+let liveStarted = false;
+function startLive() {
+  if (liveStarted) return;
+  liveStarted = true;
+  db.collection("payments").orderBy("createdAt", "desc").onSnapshot(s => {
+    S.payments = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    render();
+  }, e => console.error("payments live", e));
+  db.collection("users").onSnapshot(s => {
+    S.users = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    render();
+  }, e => console.error("users live", e));
+}
 function boot() {
   try {
     firebase.initializeApp(CONFIG.firebase);
     auth = firebase.auth();
     db = firebase.firestore();
-    db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
   } catch (e) { initError = e.message; console.error(e); }
   render();
   if (!auth) { S.ready = true; return render(); }
@@ -383,6 +406,7 @@ function boot() {
         if (await withTimeout(isAdmin(u.uid), 8000)) {
           S.admin = u;
           await withTimeout(loadAll(), 10000);
+          startLive();
         } else {
           await auth.signOut();
         }
